@@ -1,0 +1,142 @@
+TPIV(Time series Particle Image Velocimetry)
+
+作成日 20150527 Housei Wada
+加筆日 20150604 Housei Wada
+加筆日 20151217 Housei Wada
+加筆日 20161027	Housei Wada
+
+概要
+	Java 1.8に準拠のため、ImageJ本体も1.8でビルドされたものの使用が必須。
+	ImageJのpluginで時系列画像に対してPIVを行うプログラム。
+	矢印ROIを用いたOverlay表示。
+	矩形ROIによる部分的なPIVが可能。
+	RGB画像に変換を行い、矢印を長さによって色分けして書き込んだ画像を表示。
+	計算方法はCoodinateShiftに用いているLineProjection method を使用。
+	これにより、原理的にはFFTを用いたPIVより高速に計算を行うことが可能。(未検証)
+	ただし、正確性や検出力においては劣るおそれがある。(未検証)
+
+背景
+	
+	既存のPIV pluginにおていは時系列に対して簡便に行う方法で設計されたものが見当たらなかった。
+	一部のpluginではTime seriesに対する操作として、macroを合わせて公開している。
+
+
+構成
+	
+	本体
+		TPIV_.java
+		
+		
+	package:hw.tpiv
+		CalPOCtpiv.java
+			shift量を計算用
+
+
+使い方
+
+	ImageJのpluginディレクトリにTPIV_.jarをコピーする。
+	
+	画像を開く。
+		//この時、画像はTime seriesを持った画像でなくてはならないため、Image > Properties　より Frame(t)が2以上であることを確認する。
+		//また、単なるStack画像においては Slice(z)にTime seriesが入っているので、数値を入れ替えておく。
+		//複数チャンネルの場合は、Image > Color > SplitChannelsを行っておく。	*チャンネル毎の処理は考えていないため。
+		->20151217変更
+		この時、画像はStack画像でなくてはならないため、HyperStack等はStack Imageへ変更しておく。
+		c,z,tに関係なく、Stack画像の順番に処理を行う。
+
+	PluginよりTPIVを選択する。
+		TPIVのパネルが表示される。
+	
+	とりあえず何も考えず、Calculateボタンを押す。
+
+	新しい画像が表示される。
+
+	気にくわない場合、いろいろ設定を変更してそのままボタンを押す。
+		設定可能項目の意味は下記を参照
+		
+	＊部分的に処理させたい場合は矩形ROIを設定する。
+	＊Arrow ROIのOverlay表示を行なっている場合 Image > Overlay > To ROI Manegerを行うことでROI情報がROI Manegerに登録され、いろいろな計算が可能となる。
+
+
+判明している不具合
+	なし
+	
+バージョン
+	20151217
+		version 2.0
+			内部構造をUI部と処理部に分割した。
+			一部処理を並列化することで、処理速度が向上した。
+
+機能説明
+
+	TPIV
+	
+		TextField : Window width(pixel)
+			Default value : 16
+			8以上推奨(8より小さい場合、表示が上手にできません)
+			PIVのshift量を計算するために用いられる領域の幅の設定値。
+			小さいほど、より解像度が上がるがshift量の計算における過誤が増大する。
+			
+		TextField : Window height(pixel)
+			Default value : 16
+			8以上推奨(8より小さい場合、表示が上手にできません)
+			PIVのshift量を計算するために用いられる領域の高さの設定値。
+			小さいほど、より解像度が上がるがshift量の計算における過誤が増大する。
+
+		TextField : Overlap(%)
+			Default value : 50
+			上記設定のWindowを重ね合わせる量の設定値。
+			PIVにおいて多くは50%を採用している。
+			この値が大きいほど重ねあわせ量が大きくなって、より解像度が上がるが
+			あまり大きく重ねても、隣とほぼ同じ移動量となり意味のない情報に計算時間が使われることになる。
+
+		TextField : Extend Value(numeric)
+			Default value : 5
+			計算されたshift量に対してこの値をかけ合わせる。
+			1pixelの小さな値がshift量として検出された場合、矢印の表示に不具合（単純に逆向きになる）がでるため最低3をかけ合わせることを推奨する。
+			ただし、ROI Maneger等においてROIの計算をさせ長さを出す場合においてはこの数値を1にしておくことで実際の長さを測ることができる。(あとからExtend Valueで割る方法も可能)
+			
+		CheckBox : OverWrite
+			Default value : uncheck
+			check : 長さにしたがって色分けした矢印を画像に書き込む。
+			uncheck : Arrow ROI を Overlay表示する。
+			
+		
+		CheckBox : WithOriginalImage
+			Default value : check
+			check : 元画像の複製画像上にPIVの表示を行う。
+			uncheck : 黒画像上にPIVの表示を行う。
+		
+		CheckBox : CorrectByMedian
+			Default value : check
+			check : shift量の計算後に3x3Medianフィルターによる過誤値の補正を行う。
+			uncheck : shift量の補正は行わない。
+
+		Button : Save TSV
+			計算結果の座標をtsv形式で保存するボタン。
+			
+			データフォーマット
+
+			T:1;
+			起点となる座標(x,y TAB x,y TAB x,y ...)
+				*画像サイズをもとに、Window size及びOrverlapにより算出される。
+			T:2;
+			前の画像との差異分を起点となる座標に足した座標
+			T:3;
+			上同様
+			.
+			.
+			.
+			
+			
+		Button : Calculate
+			計算をおこうボタン。
+
+
+注意点
+	書き込まれる矢印の角度はwindow sizeに依存するため、小さいwindow sizeでは正確な角度は表示されない。
+	*ただし、保存用のファイルには計算された角度が保存される。
+	このため、もともと小さい画像に対して処理を行う場合は画像自体を拡大して処理をすることでこの問題を解決できる。
+	
+
+
